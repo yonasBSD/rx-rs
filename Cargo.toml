@@ -2,5 +2,12 @@
 name = "rx-rs"
 version = "0.0.1"
 edition = "2021"
+description = "A lightweight single-threaded push-based reactive programming library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/optical002/rx-rs"
+documentation = "https://docs.rs/rx-rs"
+homepage = "https://github.com/optical002/rx-rs"
+keywords = ["reactive", "observable", "rx", "functional"]
+categories = ["asynchronous", "data-structures"]
 
 [dependencies]
