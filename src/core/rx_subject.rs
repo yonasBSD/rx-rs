@@ -1,6 +1,6 @@
 use super::rx_observable::RxObservable;
-use super::rx_val::RxVal;
 use super::rx_ref::RxRef;
+use super::rx_val::RxVal;
 use super::tracker::Tracker;
 
 /// A read-write stream of events.
@@ -111,18 +111,18 @@ impl<T: 'static> RxSubject<T> {
     ///
     /// let mut tracker = DisposableTracker::new();
     /// let subject = RxSubject::new();
-    /// let val = subject.toVal(0, tracker.tracker());
+    /// let val = subject.to_val(0, tracker.tracker());
     ///
     /// assert_eq!(val.get(), 0);
     ///
     /// subject.next(42);
     /// assert_eq!(val.get(), 42);
     /// ```
-    pub fn toVal(&self, initial: T, tracker: &Tracker) -> RxVal<T>
+    pub fn to_val(&self, initial: T, tracker: &Tracker) -> RxVal<T>
     where
         T: Clone + PartialEq,
     {
-        self.inner.toVal(initial, tracker)
+        self.inner.to_val(initial, tracker)
     }
 
     /// Maps the values of this RxSubject using a transformation function.
@@ -181,7 +181,7 @@ impl<T: 'static> RxSubject<T> {
     /// let inner = RxRef::new(100);
     ///
     /// let inner_clone = inner.clone();
-    /// let flattened = subject.flatMapVal(move |_| inner_clone.val());
+    /// let flattened = subject.flat_map_val(move |_| inner_clone.val());
     ///
     /// let result = Rc::new(RefCell::new(None));
     /// let result_clone = result.clone();
@@ -193,55 +193,55 @@ impl<T: 'static> RxSubject<T> {
     /// subject.next(1);
     /// assert_eq!(*result.borrow(), Some(100));
     /// ```
-    pub fn flatMapVal<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_val<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxVal<B> + 'static,
     {
-        self.inner.flatMapVal(f)
+        self.inner.flat_map_val(f)
     }
 
     /// Flat-maps using a function that returns RxRef<B>.
-    pub fn flatMapRef<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_ref<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxRef<B> + 'static,
     {
-        self.inner.flatMapRef(f)
+        self.inner.flat_map_ref(f)
     }
 
     /// Flat-maps using a function that returns RxObservable<B>.
-    pub fn flatMapObservable<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_observable<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxObservable<B> + 'static,
     {
-        self.inner.flatMapObservable(f)
+        self.inner.flat_map_observable(f)
     }
 
     /// Flat-maps using a function that returns RxSubject<B>.
-    pub fn flatMapSubject<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_subject<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxSubject<B> + 'static,
     {
-        self.inner.flatMapSubject(f)
+        self.inner.flat_map_subject(f)
     }
 
     /// Joins this RxSubject with an RxObservable.
-    pub fn joinObservable(&self, other: RxObservable<T>) -> RxObservable<T>
+    pub fn join_observable(&self, other: RxObservable<T>) -> RxObservable<T>
     where
         T: Clone,
     {
-        self.inner.joinObservable(other)
+        self.inner.join_observable(other)
     }
 
     /// Joins this RxSubject with another RxSubject.
-    pub fn joinSubject(&self, other: RxSubject<T>) -> RxObservable<T>
+    pub fn join_subject(&self, other: RxSubject<T>) -> RxObservable<T>
     where
         T: Clone,
     {
-        self.inner.joinSubject(other)
+        self.inner.join_subject(other)
     }
 }
 

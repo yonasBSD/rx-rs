@@ -1,15 +1,17 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::any::Any;
 
-use super::tracker::Tracker;
-use super::rx_val::RxVal;
 use super::rx_ref::RxRef;
 use super::rx_subject::RxSubject;
+use super::rx_val::RxVal;
+use super::tracker::Tracker;
+
+type Subscriber<T> = Rc<RefCell<Box<dyn FnMut(&T)>>>;
 
 /// Internal storage for an observable stream.
 pub(super) struct RxObservableInner<T> {
-    subscribers: Vec<Rc<RefCell<Box<dyn FnMut(&T)>>>>,
+    subscribers: Vec<Subscriber<T>>,
     // Optional tracker to keep subscriptions alive
     // Used by .stream() to maintain the source subscription
     pub(super) _lifetime_tracker: Option<Rc<dyn Any>>,
@@ -77,9 +79,10 @@ impl<T: 'static> RxObservable<T> {
         // Add cleanup to tracker
         tracker.add(move || {
             // Remove subscriber when tracker drops
-            inner_clone.borrow_mut().subscribers.retain(|s| {
-                !Rc::ptr_eq(s, &subscriber)
-            });
+            inner_clone
+                .borrow_mut()
+                .subscribers
+                .retain(|s| !Rc::ptr_eq(s, &subscriber));
         });
     }
 
@@ -99,19 +102,6 @@ impl<T: 'static> RxObservable<T> {
             inner: Rc::new(RefCell::new(RxObservableInner {
                 subscribers: Vec::new(),
                 _lifetime_tracker: None,
-            })),
-        }
-    }
-
-    /// Creates a new RxObservable with a lifetime tracker.
-    ///
-    /// The tracker is kept alive as long as the observable exists,
-    /// ensuring any subscriptions registered with it remain active.
-    pub(crate) fn with_lifetime_tracker(tracker: Rc<dyn Any>) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(RxObservableInner {
-                subscribers: Vec::new(),
-                _lifetime_tracker: Some(tracker),
             })),
         }
     }
@@ -144,14 +134,14 @@ impl<T: 'static> RxObservable<T> {
     ///
     /// let mut tracker = DisposableTracker::new();
     /// let subject = RxSubject::new();
-    /// let val = subject.observable().toVal(0, tracker.tracker());
+    /// let val = subject.observable().to_val(0, tracker.tracker());
     ///
     /// assert_eq!(val.get(), 0);
     ///
     /// subject.next(42);
     /// assert_eq!(val.get(), 42);
     /// ```
-    pub fn toVal(&self, initial: T, tracker: &Tracker) -> RxVal<T>
+    pub fn to_val(&self, initial: T, tracker: &Tracker) -> RxVal<T>
     where
         T: Clone + PartialEq,
     {
@@ -212,7 +202,7 @@ impl<T: 'static> RxObservable<T> {
 
         // Subscribe to this observable and forward transformed values to the subject
         let subject_clone = subject.clone();
-        self.subscribe(&*tracker, move |value| {
+        self.subscribe(&tracker, move |value| {
             subject_clone.next(f(value));
         });
 
@@ -244,7 +234,7 @@ impl<T: 'static> RxObservable<T> {
     /// let inner = RxRef::new(100);
     ///
     /// let inner_clone = inner.clone();
-    /// let flattened = subject.observable().flatMapVal(move |_| inner_clone.val());
+    /// let flattened = subject.observable().flat_map_val(move |_| inner_clone.val());
     ///
     /// let result = Rc::new(RefCell::new(None));
     /// let result_clone = result.clone();
@@ -257,7 +247,7 @@ impl<T: 'static> RxObservable<T> {
     /// // Emits twice: once for current value, once for subscription
     /// assert_eq!(*result.borrow(), Some(100));
     /// ```
-    pub fn flatMapVal<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_val<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxVal<B> + 'static,
@@ -276,7 +266,7 @@ impl<T: 'static> RxObservable<T> {
         let inner_tracker_clone = inner_tracker.clone();
         let f_rc = Rc::new(f);
 
-        self.subscribe(&*outer_tracker, move |outer_value| {
+        self.subscribe(&outer_tracker, move |outer_value| {
             // Get new inner RxVal
             let new_inner = f_rc(outer_value);
 
@@ -288,7 +278,7 @@ impl<T: 'static> RxObservable<T> {
 
             // Subscribe to the new inner
             let subject_clone2 = subject_clone.clone();
-            new_inner.subscribe(&*inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
                 subject_clone2.next(inner_value.clone());
             });
         });
@@ -302,18 +292,18 @@ impl<T: 'static> RxObservable<T> {
     }
 
     /// Flat-maps using a function that returns RxRef<B>.
-    /// Delegates to flatMapVal by converting the RxRef to RxVal.
-    pub fn flatMapRef<B, F>(&self, f: F) -> RxObservable<B>
+    /// Delegates to flat_map_val by converting the RxRef to RxVal.
+    pub fn flat_map_ref<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxRef<B> + 'static,
     {
-        self.flatMapVal(move |x| f(x).val())
+        self.flat_map_val(move |x| f(x).val())
     }
 
     /// Flat-maps using a function that returns RxObservable<B>.
     /// Switches to the new observable each time the source emits.
-    pub fn flatMapObservable<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_observable<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxObservable<B> + 'static,
@@ -328,12 +318,12 @@ impl<T: 'static> RxObservable<T> {
         let inner_tracker_clone = inner_tracker.clone();
         let f_rc = Rc::new(f);
 
-        self.subscribe(&*outer_tracker, move |outer_value| {
+        self.subscribe(&outer_tracker, move |outer_value| {
             let new_inner = f_rc(outer_value);
             *inner_tracker_clone.borrow_mut() = Tracker::new();
 
             let subject_clone2 = subject_clone.clone();
-            new_inner.subscribe(&*inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
                 subject_clone2.next(inner_value.clone());
             });
         });
@@ -346,13 +336,13 @@ impl<T: 'static> RxObservable<T> {
     }
 
     /// Flat-maps using a function that returns RxSubject<B>.
-    /// Delegates to flatMapObservable by converting the RxSubject to RxObservable.
-    pub fn flatMapSubject<B, F>(&self, f: F) -> RxObservable<B>
+    /// Delegates to flat_map_observable by converting the RxSubject to RxObservable.
+    pub fn flat_map_subject<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxSubject<B> + 'static,
     {
-        self.flatMapObservable(move |x| f(x).observable())
+        self.flat_map_observable(move |x| f(x).observable())
     }
 
     /// Joins this RxObservable with another RxObservable.
@@ -373,7 +363,7 @@ impl<T: 'static> RxObservable<T> {
     /// let subject1 = RxSubject::new();
     /// let subject2 = RxSubject::new();
     ///
-    /// let joined = subject1.observable().joinObservable(subject2.observable());
+    /// let joined = subject1.observable().join_observable(subject2.observable());
     ///
     /// let results = Rc::new(RefCell::new(Vec::new()));
     /// let results_clone = results.clone();
@@ -388,7 +378,7 @@ impl<T: 'static> RxObservable<T> {
     ///
     /// assert_eq!(*results.borrow(), vec![1, 2, 3]);
     /// ```
-    pub fn joinObservable(&self, other: RxObservable<T>) -> RxObservable<T>
+    pub fn join_observable(&self, other: RxObservable<T>) -> RxObservable<T>
     where
         T: Clone,
     {
@@ -403,13 +393,13 @@ impl<T: 'static> RxObservable<T> {
 
         // Subscribe to self
         let subject_clone1 = subject.clone();
-        self.subscribe(&*tracker1, move |value| {
+        self.subscribe(&tracker1, move |value| {
             subject_clone1.next(value.clone());
         });
 
         // Subscribe to other
         let subject_clone2 = subject.clone();
-        other.subscribe(&*tracker2, move |value| {
+        other.subscribe(&tracker2, move |value| {
             subject_clone2.next(value.clone());
         });
 
@@ -422,11 +412,11 @@ impl<T: 'static> RxObservable<T> {
     }
 
     /// Joins this RxObservable with an RxSubject.
-    /// Delegates to joinObservable by converting the RxSubject to RxObservable.
-    pub fn joinSubject(&self, other: RxSubject<T>) -> RxObservable<T>
+    /// Delegates to join_observable by converting the RxSubject to RxObservable.
+    pub fn join_subject(&self, other: RxSubject<T>) -> RxObservable<T>
     where
         T: Clone,
     {
-        self.joinObservable(other.observable())
+        self.join_observable(other.observable())
     }
 }

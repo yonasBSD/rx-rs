@@ -1,4 +1,4 @@
-use rx_rs::core::{DisposableTracker, RxSubject};
+use rx_rs::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -11,9 +11,10 @@ fn test_no_immediate_call() {
     let called = Rc::new(RefCell::new(false));
     let called_clone = called.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *called_clone.borrow_mut() = true;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *called_clone.borrow_mut() = true;
+        });
 
     // Should NOT be called immediately (unlike RxVal)
     assert!(!*called.borrow());
@@ -28,9 +29,10 @@ fn test_next_emits_to_subscriber() {
     let received = Rc::new(RefCell::new(None));
     let received_clone = received.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |val: &i32| {
-        *received_clone.borrow_mut() = Some(*val);
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |val: &i32| {
+            *received_clone.borrow_mut() = Some(*val);
+        });
 
     // Nothing received yet
     assert_eq!(*received.borrow(), None);
@@ -49,9 +51,10 @@ fn test_multiple_events() {
     let events = Rc::new(RefCell::new(Vec::new()));
     let events_clone = events.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |val: &i32| {
-        events_clone.borrow_mut().push(*val);
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |val: &i32| {
+            events_clone.borrow_mut().push(*val);
+        });
 
     rx.next(1);
     rx.next(2);
@@ -73,13 +76,15 @@ fn test_clone_subject_shares_state() {
     let count1_clone = count1.clone();
     let count2_clone = count2.clone();
 
-    rx1.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count1_clone.borrow_mut() += 1;
-    });
+    rx1.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count1_clone.borrow_mut() += 1;
+        });
 
-    rx2.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count2_clone.borrow_mut() += 1;
-    });
+    rx2.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count2_clone.borrow_mut() += 1;
+        });
 
     // Emit on first clone
     rx1.next(42);
@@ -108,13 +113,15 @@ fn test_multiple_subscribers() {
     let count1_clone = count1.clone();
     let count2_clone = count2.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count1_clone.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count1_clone.borrow_mut() += 1;
+        });
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count2_clone.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count2_clone.borrow_mut() += 1;
+        });
 
     // Neither called yet
     assert_eq!(*count1.borrow(), 0);
@@ -137,9 +144,10 @@ fn test_tracker_cleanup() {
         let tracker = DisposableTracker::new();
         let call_count_clone = call_count.clone();
 
-        rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-            *call_count_clone.borrow_mut() += 1;
-        });
+        rx.observable()
+            .subscribe(tracker.tracker(), move |_: &i32| {
+                *call_count_clone.borrow_mut() += 1;
+            });
 
         // Not called yet
         assert_eq!(*call_count.borrow(), 0);
@@ -164,9 +172,10 @@ fn test_disposable_tracker_dispose() {
     let call_count = Rc::new(RefCell::new(0));
     let call_count_clone = call_count.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *call_count_clone.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *call_count_clone.borrow_mut() += 1;
+        });
 
     rx.next(1);
     assert_eq!(*call_count.borrow(), 1);
@@ -191,17 +200,19 @@ fn test_multiple_trackers() {
         let tracker1 = DisposableTracker::new();
         let count1_clone = count1.clone();
 
-        rx.observable().subscribe(tracker1.tracker(), move |_: &i32| {
-            *count1_clone.borrow_mut() += 1;
-        });
+        rx.observable()
+            .subscribe(tracker1.tracker(), move |_: &i32| {
+                *count1_clone.borrow_mut() += 1;
+            });
 
         {
             let tracker2 = DisposableTracker::new();
             let count2_clone = count2.clone();
 
-            rx.observable().subscribe(tracker2.tracker(), move |_: &i32| {
-                *count2_clone.borrow_mut() += 1;
-            });
+            rx.observable()
+                .subscribe(tracker2.tracker(), move |_: &i32| {
+                    *count2_clone.borrow_mut() += 1;
+                });
 
             rx.next(1);
 
@@ -237,9 +248,10 @@ fn test_resubscribe_after_dispose() {
     let count = Rc::new(RefCell::new(0));
     let count_clone = count.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count_clone.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count_clone.borrow_mut() += 1;
+        });
 
     rx.next(1);
     assert_eq!(*count.borrow(), 1);
@@ -251,9 +263,10 @@ fn test_resubscribe_after_dispose() {
 
     // Resubscribe with same tracker
     let count_clone2 = count.clone();
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *count_clone2.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *count_clone2.borrow_mut() += 1;
+        });
 
     // NOT called immediately (no current value)
     assert_eq!(*count.borrow(), 1);
@@ -271,9 +284,10 @@ fn test_same_value_emits_every_time() {
     let call_count = Rc::new(RefCell::new(0));
     let call_count_clone = call_count.clone();
 
-    rx.observable().subscribe(tracker.tracker(), move |_: &i32| {
-        *call_count_clone.borrow_mut() += 1;
-    });
+    rx.observable()
+        .subscribe(tracker.tracker(), move |_: &i32| {
+            *call_count_clone.borrow_mut() += 1;
+        });
 
     // Emit same value multiple times
     rx.next(42);

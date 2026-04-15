@@ -1,12 +1,12 @@
 use rx_rs::core::RxRef;
 
-// Test 1: RxVal.zipVal() combines two values
+// Test 1: RxVal.zip_val() combines two values
 #[test]
 fn test_rx_val_zip_val() {
     let name = RxRef::new("Alice");
     let age = RxRef::new(30);
 
-    let combined = name.val().zipVal(age.val());
+    let combined = name.val().zip_val(age.val());
 
     assert_eq!(combined.get(), ("Alice", 30));
 
@@ -17,13 +17,13 @@ fn test_rx_val_zip_val() {
     assert_eq!(combined.get(), ("Bob", 25));
 }
 
-// Test 2: RxVal.zipRef() works with RxRef
+// Test 2: RxVal.zip_ref() works with RxRef
 #[test]
 fn test_rx_val_zip_ref() {
     let x = RxRef::new(10);
     let y = RxRef::new(20);
 
-    let combined = x.val().zipRef(y.clone());
+    let combined = x.val().zip_ref(y.clone());
 
     assert_eq!(combined.get(), (10, 20));
 
@@ -34,13 +34,13 @@ fn test_rx_val_zip_ref() {
     assert_eq!(combined.get(), (15, 25));
 }
 
-// Test 3: RxRef.zipVal() works
+// Test 3: RxRef.zip_val() works
 #[test]
 fn test_rx_ref_zip_val() {
     let a = RxRef::new(true);
     let b = RxRef::new(false);
 
-    let combined = a.zipVal(b.val());
+    let combined = a.zip_val(b.val());
 
     assert_eq!(combined.get(), (true, false));
 
@@ -48,13 +48,13 @@ fn test_rx_ref_zip_val() {
     assert_eq!(combined.get(), (false, false));
 }
 
-// Test 4: RxRef.zipRef() works
+// Test 4: RxRef.zip_ref() works
 #[test]
 fn test_rx_ref_zip_ref() {
     let first = RxRef::new("hello");
     let second = RxRef::new("world");
 
-    let combined = first.zipRef(second.clone());
+    let combined = first.zip_ref(second.clone());
 
     assert_eq!(combined.get(), ("hello", "world"));
 
@@ -71,7 +71,7 @@ fn test_zip_different_types() {
     let number = RxRef::new(42);
     let text = RxRef::new("answer");
 
-    let combined = number.zipRef(text);
+    let combined = number.zip_ref(text);
 
     assert_eq!(combined.get(), (42, "answer"));
 
@@ -86,7 +86,7 @@ fn test_multiple_zips() {
     let b = RxRef::new(2);
     let c = RxRef::new(3);
 
-    let ab = a.zipVal(b.val());
+    let ab = a.zip_val(b.val());
     let c_clone = c.clone();
     let abc = ab.map(move |(a, b)| (*a, *b, c_clone.get()));
 

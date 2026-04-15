@@ -1,6 +1,6 @@
-use super::rx_val::RxVal;
 use super::rx_observable::RxObservable;
 use super::rx_subject::RxSubject;
+use super::rx_val::RxVal;
 
 /// A read-write reactive value that holds a current state.
 ///
@@ -200,7 +200,7 @@ where
     /// and the result RxVal is updated to reflect the current value of that inner RxVal.
     /// The result also updates when the inner RxVal changes.
     ///
-    /// This is a convenience method that delegates to the underlying RxVal's `.flatMap()`.
+    /// This is a convenience method that delegates to the underlying RxVal's `.flat_map()`.
     ///
     /// # Arguments
     /// * `f` - Function to transform values from A to RxVal<B>
@@ -216,7 +216,7 @@ where
     /// let inner1_clone = inner1.clone();
     /// let inner2_clone = inner2.clone();
     ///
-    /// let flattened = outer.flatMap(move |&x| {
+    /// let flattened = outer.flat_map(move |&x| {
     ///     if x == 1 { inner1_clone.val() } else { inner2_clone.val() }
     /// });
     ///
@@ -225,54 +225,54 @@ where
     /// outer.set(2);
     /// assert_eq!(flattened.get(), 20);
     /// ```
-    pub fn flatMap<B, F>(&self, f: F) -> RxVal<B>
+    pub fn flat_map<B, F>(&self, f: F) -> RxVal<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxVal<B> + 'static,
     {
-        self.inner.flatMap(f)
+        self.inner.flat_map(f)
     }
 
     /// Flat-maps using a function that returns RxRef<B>.
-    pub fn flatMapRef<B, F>(&self, f: F) -> RxVal<B>
+    pub fn flat_map_ref<B, F>(&self, f: F) -> RxVal<B>
     where
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxRef<B> + 'static,
     {
-        self.inner.flatMapRef(f)
+        self.inner.flat_map_ref(f)
     }
 
     /// Flat-maps using a function that returns RxObservable<B>.
-    pub fn flatMapObservable<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_observable<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxObservable<B> + 'static,
     {
-        self.inner.flatMapObservable(f)
+        self.inner.flat_map_observable(f)
     }
 
     /// Flat-maps using a function that returns RxSubject<B>.
-    pub fn flatMapSubject<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_subject<B, F>(&self, f: F) -> RxObservable<B>
     where
         B: Clone + 'static,
         F: Fn(&T) -> RxSubject<B> + 'static,
     {
-        self.inner.flatMapSubject(f)
+        self.inner.flat_map_subject(f)
     }
 
     /// Combines this RxRef with another RxVal.
-    pub fn zipVal<U>(&self, other: RxVal<U>) -> RxVal<(T, U)>
+    pub fn zip_val<U>(&self, other: RxVal<U>) -> RxVal<(T, U)>
     where
         U: Clone + PartialEq + 'static,
     {
-        self.inner.zipVal(other)
+        self.inner.zip_val(other)
     }
 
     /// Combines this RxRef with another RxRef.
-    pub fn zipRef<U>(&self, other: RxRef<U>) -> RxVal<(T, U)>
+    pub fn zip_ref<U>(&self, other: RxRef<U>) -> RxVal<(T, U)>
     where
         U: Clone + PartialEq + 'static,
     {
-        self.inner.zipRef(other)
+        self.inner.zip_ref(other)
     }
 }

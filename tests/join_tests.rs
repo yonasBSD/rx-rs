@@ -1,15 +1,15 @@
-use rx_rs::core::{DisposableTracker, RxSubject};
+use rx_rs::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// Test 1: RxObservable.joinObservable() merges two observables
+// Test 1: RxObservable.join_observable() merges two observables
 #[test]
 fn test_rx_observable_join_observable() {
     let tracker = DisposableTracker::new();
     let subject1 = RxSubject::new();
     let subject2 = RxSubject::new();
 
-    let joined = subject1.observable().joinObservable(subject2.observable());
+    let joined = subject1.observable().join_observable(subject2.observable());
 
     let values = Rc::new(RefCell::new(Vec::new()));
     let values_clone = values.clone();
@@ -26,14 +26,14 @@ fn test_rx_observable_join_observable() {
     assert_eq!(*values.borrow(), vec![1, 2, 3, 4]);
 }
 
-// Test 2: RxObservable.joinSubject() works
+// Test 2: RxObservable.join_subject() works
 #[test]
 fn test_rx_observable_join_subject() {
     let tracker = DisposableTracker::new();
     let subject1 = RxSubject::new();
     let subject2 = RxSubject::new();
 
-    let joined = subject1.observable().joinSubject(subject2.clone());
+    let joined = subject1.observable().join_subject(subject2.clone());
 
     let values = Rc::new(RefCell::new(Vec::new()));
     let values_clone = values.clone();
@@ -49,14 +49,14 @@ fn test_rx_observable_join_subject() {
     assert_eq!(*values.borrow(), vec![10, 20, 30]);
 }
 
-// Test 3: RxSubject.joinObservable() works
+// Test 3: RxSubject.join_observable() works
 #[test]
 fn test_rx_subject_join_observable() {
     let tracker = DisposableTracker::new();
     let subject1 = RxSubject::new();
     let subject2 = RxSubject::new();
 
-    let joined = subject1.joinObservable(subject2.observable());
+    let joined = subject1.join_observable(subject2.observable());
 
     let values = Rc::new(RefCell::new(Vec::new()));
     let values_clone = values.clone();
@@ -72,14 +72,14 @@ fn test_rx_subject_join_observable() {
     assert_eq!(*values.borrow(), vec!["a", "b", "c"]);
 }
 
-// Test 4: RxSubject.joinSubject() works
+// Test 4: RxSubject.join_subject() works
 #[test]
 fn test_rx_subject_join_subject() {
     let tracker = DisposableTracker::new();
     let subject1 = RxSubject::new();
     let subject2 = RxSubject::new();
 
-    let joined = subject1.joinSubject(subject2.clone());
+    let joined = subject1.join_subject(subject2.clone());
 
     let values = Rc::new(RefCell::new(Vec::new()));
     let values_clone = values.clone();
@@ -104,8 +104,8 @@ fn test_join_multiple() {
     let subject2 = RxSubject::new();
     let subject3 = RxSubject::new();
 
-    let joined12 = subject1.joinSubject(subject2.clone());
-    let joined_all = joined12.joinSubject(subject3.clone());
+    let joined12 = subject1.join_subject(subject2.clone());
+    let joined_all = joined12.join_subject(subject3.clone());
 
     let values = Rc::new(RefCell::new(Vec::new()));
     let values_clone = values.clone();

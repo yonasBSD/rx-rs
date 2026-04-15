@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+type Cleanups = Rc<RefCell<Vec<Box<dyn FnOnce()>>>>;
+
 /// Tracks reactive subscriptions and automatically cleans them up when dropped.
 ///
 /// Subscriptions registered with a Tracker will be automatically disposed when
@@ -9,7 +11,7 @@ use std::rc::Rc;
 /// Note: Tracker cannot be created directly. Use `DisposableTracker::new()` and
 /// get the Tracker via `.tracker()`.
 pub struct Tracker {
-    cleanups: Rc<RefCell<Vec<Box<dyn FnOnce()>>>>,
+    cleanups: Cleanups,
 }
 
 impl Tracker {

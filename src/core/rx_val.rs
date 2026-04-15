@@ -1,16 +1,18 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::any::Any;
 
-use super::tracker::Tracker;
 use super::rx_observable::RxObservable;
-use super::rx_subject::RxSubject;
 use super::rx_ref::RxRef;
+use super::rx_subject::RxSubject;
+use super::tracker::Tracker;
+
+type Subscriber<T> = Rc<RefCell<Box<dyn FnMut(&T)>>>;
 
 /// Internal storage for a reactive value.
 struct RxValInner<T> {
     value: T,
-    subscribers: Vec<Rc<RefCell<Box<dyn FnMut(&T)>>>>,
+    subscribers: Vec<Subscriber<T>>,
     // Optional tracker to keep subscriptions alive
     // Used by .map() and other operators to maintain source subscriptions
     // Can store any type that needs to be kept alive
@@ -86,9 +88,10 @@ impl<T: 'static> RxVal<T> {
         // Add cleanup to tracker
         tracker.add(move || {
             // Remove subscriber when tracker drops
-            inner_clone.borrow_mut().subscribers.retain(|s| {
-                !Rc::ptr_eq(s, &subscriber)
-            });
+            inner_clone
+                .borrow_mut()
+                .subscribers
+                .retain(|s| !Rc::ptr_eq(s, &subscriber));
         });
     }
 
@@ -135,7 +138,7 @@ impl<T: 'static> RxVal<T> {
         // Subscribe to this RxVal and forward all values to the subject
         // BUT skip the immediate emission of the current value
         let subject_clone = subject.clone();
-        self.subscribe(&*tracker, move |value| {
+        self.subscribe(&tracker, move |value| {
             if *first.borrow() {
                 *first.borrow_mut() = false;
                 return; // Skip the first emission (current value)
@@ -190,7 +193,7 @@ impl<T: 'static> RxVal<T> {
 
         // Subscribe to this RxVal and update the mapped ref
         let rx_ref_clone = rx_ref.clone();
-        self.subscribe(&*tracker, move |value| {
+        self.subscribe(&tracker, move |value| {
             rx_ref_clone.set(f(value));
         });
 
@@ -221,7 +224,7 @@ impl<T: 'static> RxVal<T> {
     /// let inner1_clone = inner1.clone();
     /// let inner2_clone = inner2.clone();
     ///
-    /// let flattened = outer.val().flatMap(move |&x| {
+    /// let flattened = outer.val().flat_map(move |&x| {
     ///     if x == 1 { inner1_clone.val() } else { inner2_clone.val() }
     /// });
     ///
@@ -230,7 +233,7 @@ impl<T: 'static> RxVal<T> {
     /// outer.set(2);
     /// assert_eq!(flattened.get(), 20);
     /// ```
-    pub fn flatMap<B, F>(&self, f: F) -> RxVal<B>
+    pub fn flat_map<B, F>(&self, f: F) -> RxVal<B>
     where
         T: Clone,
         B: Clone + PartialEq + 'static,
@@ -254,7 +257,7 @@ impl<T: 'static> RxVal<T> {
         let inner_tracker_clone = inner_tracker.clone();
         let f_clone = Rc::new(f);
 
-        self.subscribe(&*outer_tracker, move |outer_value| {
+        self.subscribe(&outer_tracker, move |outer_value| {
             // Get new inner RxVal
             let new_inner = f_clone(outer_value);
 
@@ -266,7 +269,7 @@ impl<T: 'static> RxVal<T> {
 
             // Subscribe to the new inner
             let result_ref_clone2 = result_ref_clone.clone();
-            new_inner.subscribe(&*inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
                 result_ref_clone2.set(inner_value.clone());
             });
         });
@@ -277,25 +280,26 @@ impl<T: 'static> RxVal<T> {
         // We need to keep both trackers alive
         // Store them in a combined structure
         let combined_tracker = Rc::new((outer_tracker, inner_tracker));
-        result_val.inner.borrow_mut()._lifetime_tracker = Some(combined_tracker as Rc<dyn std::any::Any>);
+        result_val.inner.borrow_mut()._lifetime_tracker =
+            Some(combined_tracker as Rc<dyn std::any::Any>);
 
         result_val
     }
 
     /// Flat-maps using a function that returns RxRef<B>.
-    /// Delegates to flatMap by converting the RxRef to RxVal.
-    pub fn flatMapRef<B, F>(&self, f: F) -> RxVal<B>
+    /// Delegates to flat_map by converting the RxRef to RxVal.
+    pub fn flat_map_ref<B, F>(&self, f: F) -> RxVal<B>
     where
         T: Clone,
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxRef<B> + 'static,
     {
-        self.flatMap(move |x| f(x).val())
+        self.flat_map(move |x| f(x).val())
     }
 
     /// Flat-maps using a function that returns RxObservable<B>.
     /// Returns an RxObservable that switches to the new observable on each change.
-    pub fn flatMapObservable<B, F>(&self, f: F) -> RxObservable<B>
+    pub fn flat_map_observable<B, F>(&self, f: F) -> RxObservable<B>
     where
         T: Clone,
         B: Clone + 'static,
@@ -311,12 +315,12 @@ impl<T: 'static> RxVal<T> {
         let inner_tracker_clone = inner_tracker.clone();
         let f_rc = Rc::new(f);
 
-        self.subscribe(&*outer_tracker, move |outer_value| {
+        self.subscribe(&outer_tracker, move |outer_value| {
             let new_inner = f_rc(outer_value);
             *inner_tracker_clone.borrow_mut() = Tracker::new();
 
             let subject_clone2 = subject_clone.clone();
-            new_inner.subscribe(&*inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
                 subject_clone2.next(inner_value.clone());
             });
         });
@@ -329,14 +333,14 @@ impl<T: 'static> RxVal<T> {
     }
 
     /// Flat-maps using a function that returns RxSubject<B>.
-    /// Delegates to flatMapObservable by converting the RxSubject to RxObservable.
-    pub fn flatMapSubject<B, F>(&self, f: F) -> RxObservable<B>
+    /// Delegates to flat_map_observable by converting the RxSubject to RxObservable.
+    pub fn flat_map_subject<B, F>(&self, f: F) -> RxObservable<B>
     where
         T: Clone,
         B: Clone + 'static,
         F: Fn(&T) -> RxSubject<B> + 'static,
     {
-        self.flatMapObservable(move |x| f(x).observable())
+        self.flat_map_observable(move |x| f(x).observable())
     }
 
     /// Combines this RxVal with another RxVal, producing a new RxVal containing a tuple.
@@ -353,14 +357,14 @@ impl<T: 'static> RxVal<T> {
     /// let name = RxRef::new("Alice");
     /// let age = RxRef::new(30);
     ///
-    /// let combined = name.val().zipVal(age.val());
+    /// let combined = name.val().zip_val(age.val());
     ///
     /// assert_eq!(combined.get(), ("Alice", 30));
     ///
     /// name.set("Bob");
     /// assert_eq!(combined.get(), ("Bob", 30));
     /// ```
-    pub fn zipVal<U>(&self, other: RxVal<U>) -> RxVal<(T, U)>
+    pub fn zip_val<U>(&self, other: RxVal<U>) -> RxVal<(T, U)>
     where
         T: Clone + PartialEq,
         U: Clone + PartialEq + 'static,
@@ -378,14 +382,14 @@ impl<T: 'static> RxVal<T> {
         // Subscribe to self
         let result_ref_clone1 = result_ref.clone();
         let other_clone1 = other.clone();
-        self.subscribe(&*tracker1, move |self_val| {
+        self.subscribe(&tracker1, move |self_val| {
             result_ref_clone1.set((self_val.clone(), other_clone1.get()));
         });
 
         // Subscribe to other
         let result_ref_clone2 = result_ref.clone();
         let self_clone = self.clone();
-        other.subscribe(&*tracker2, move |other_val| {
+        other.subscribe(&tracker2, move |other_val| {
             result_ref_clone2.set((self_clone.get(), other_val.clone()));
         });
 
@@ -398,13 +402,13 @@ impl<T: 'static> RxVal<T> {
     }
 
     /// Combines this RxVal with an RxRef.
-    /// Delegates to zipVal by converting the RxRef to RxVal.
-    pub fn zipRef<U>(&self, other: RxRef<U>) -> RxVal<(T, U)>
+    /// Delegates to zip_val by converting the RxRef to RxVal.
+    pub fn zip_ref<U>(&self, other: RxRef<U>) -> RxVal<(T, U)>
     where
         T: Clone + PartialEq,
         U: Clone + PartialEq + 'static,
     {
-        self.zipVal(other.val())
+        self.zip_val(other.val())
     }
 }
 
@@ -422,20 +426,6 @@ where
                 value,
                 subscribers: Vec::new(),
                 _lifetime_tracker: None,
-            })),
-        }
-    }
-
-    /// Creates a new RxVal with a lifetime tracker.
-    ///
-    /// The tracker is kept alive as long as the RxVal exists,
-    /// ensuring any subscriptions registered with it remain active.
-    fn with_lifetime_tracker(value: T, tracker: Rc<dyn Any>) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(RxValInner {
-                value,
-                subscribers: Vec::new(),
-                _lifetime_tracker: Some(tracker),
             })),
         }
     }
