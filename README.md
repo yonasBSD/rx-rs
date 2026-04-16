@@ -60,13 +60,15 @@ graph TD
     DisposableTracker -->|".tracker()"| Tracker
     Tracker -.->|"required by"| Subscription
 
-    style RxRef fill:#fef3c7,stroke:#333,stroke-width:2px
-    style RxSubject fill:#fef3c7,stroke:#333,stroke-width:2px
-    style RxVal fill:#fef3c7,stroke:#333,stroke-width:2px
-    style RxObservable fill:#fef3c7,stroke:#333,stroke-width:2px
-    style Subscription fill:#dbeafe,stroke:#333,stroke-width:2px
-    style Tracker fill:#dcfce7,stroke:#333,stroke-width:2px
-    style DisposableTracker fill:#dcfce7,stroke:#333,stroke-width:2px
+    style RxRef fill:#fef3c7,stroke:#333,stroke-width:2px,color:#000
+    style RxSubject fill:#fef3c7,stroke:#333,stroke-width:2px,color:#000
+    style RxVal fill:#fef3c7,stroke:#333,stroke-width:2px,color:#000
+    style RxObservable fill:#fef3c7,stroke:#333,stroke-width:2px,color:#000
+    style Subscription fill:#dbeafe,stroke:#333,stroke-width:2px,color:#000
+    style Tracker fill:#dcfce7,stroke:#333,stroke-width:2px,color:#000
+    style DisposableTracker fill:#dcfce7,stroke:#333,stroke-width:2px,color:#000
+
+    linkStyle default color:#000
 ```
 
 ## Quick Start
