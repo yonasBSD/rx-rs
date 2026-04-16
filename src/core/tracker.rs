@@ -38,17 +38,6 @@ impl Tracker {
     }
 }
 
-impl Drop for Tracker {
-    fn drop(&mut self) {
-        // Only run cleanups if this is the last reference
-        if let Ok(mut cleanups) = self.cleanups.try_borrow_mut() {
-            for cleanup in cleanups.drain(..) {
-                cleanup();
-            }
-        }
-    }
-}
-
 impl Clone for Tracker {
     fn clone(&self) -> Self {
         Self {
@@ -100,5 +89,16 @@ impl DisposableTracker {
 impl Default for DisposableTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for DisposableTracker {
+    fn drop(&mut self) {
+        // Clean up all subscriptions when DisposableTracker is dropped
+        if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
+            for cleanup in cleanups.drain(..) {
+                cleanup();
+            }
+        }
     }
 }

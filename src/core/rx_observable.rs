@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::rx_ref::RxRef;
 use super::rx_subject::RxSubject;
 use super::rx_val::RxVal;
-use super::tracker::Tracker;
+use super::tracker::{DisposableTracker, Tracker};
 
 type Subscriber<T> = Rc<RefCell<Box<dyn FnMut(&T)>>>;
 
@@ -198,11 +198,11 @@ impl<T: 'static> RxObservable<T> {
         let subject = RxSubject::new();
 
         // Create a tracker that will live as long as the returned observable
-        let tracker = Rc::new(Tracker::new());
+        let tracker = Rc::new(DisposableTracker::new());
 
         // Subscribe to this observable and forward transformed values to the subject
         let subject_clone = subject.clone();
-        self.subscribe(&tracker, move |value| {
+        self.subscribe(tracker.tracker(), move |value| {
             subject_clone.next(f(value));
         });
 
@@ -258,27 +258,28 @@ impl<T: 'static> RxObservable<T> {
         let subject = RxSubject::new();
 
         // Create trackers
-        let outer_tracker = Rc::new(Tracker::new());
-        let inner_tracker = Rc::new(RefCell::new(Tracker::new()));
+        let outer_tracker = Rc::new(DisposableTracker::new());
+        let inner_tracker = Rc::new(RefCell::new(DisposableTracker::new()));
 
         // Subscribe to this observable
         let subject_clone = subject.clone();
         let inner_tracker_clone = inner_tracker.clone();
         let f_rc = Rc::new(f);
 
-        self.subscribe(&outer_tracker, move |outer_value| {
+        self.subscribe(outer_tracker.tracker(), move |outer_value| {
             // Get new inner RxVal
             let new_inner = f_rc(outer_value);
 
             // Cancel previous inner subscription
-            *inner_tracker_clone.borrow_mut() = Tracker::new();
+            inner_tracker_clone.borrow_mut().dispose();
+            *inner_tracker_clone.borrow_mut() = DisposableTracker::new();
 
             // Emit the current value of the new inner
             subject_clone.next(new_inner.get());
 
             // Subscribe to the new inner
             let subject_clone2 = subject_clone.clone();
-            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(inner_tracker_clone.borrow().tracker(), move |inner_value| {
                 subject_clone2.next(inner_value.clone());
             });
         });
@@ -311,19 +312,20 @@ impl<T: 'static> RxObservable<T> {
         use super::rx_subject::RxSubject;
 
         let subject = RxSubject::new();
-        let outer_tracker = Rc::new(Tracker::new());
-        let inner_tracker = Rc::new(RefCell::new(Tracker::new()));
+        let outer_tracker = Rc::new(DisposableTracker::new());
+        let inner_tracker = Rc::new(RefCell::new(DisposableTracker::new()));
 
         let subject_clone = subject.clone();
         let inner_tracker_clone = inner_tracker.clone();
         let f_rc = Rc::new(f);
 
-        self.subscribe(&outer_tracker, move |outer_value| {
+        self.subscribe(outer_tracker.tracker(), move |outer_value| {
             let new_inner = f_rc(outer_value);
-            *inner_tracker_clone.borrow_mut() = Tracker::new();
+            inner_tracker_clone.borrow_mut().dispose();
+            *inner_tracker_clone.borrow_mut() = DisposableTracker::new();
 
             let subject_clone2 = subject_clone.clone();
-            new_inner.subscribe(&inner_tracker_clone.borrow(), move |inner_value| {
+            new_inner.subscribe(inner_tracker_clone.borrow().tracker(), move |inner_value| {
                 subject_clone2.next(inner_value.clone());
             });
         });
@@ -388,18 +390,18 @@ impl<T: 'static> RxObservable<T> {
         let subject = RxSubject::new();
 
         // Create trackers for both subscriptions
-        let tracker1 = Rc::new(Tracker::new());
-        let tracker2 = Rc::new(Tracker::new());
+        let tracker1 = Rc::new(DisposableTracker::new());
+        let tracker2 = Rc::new(DisposableTracker::new());
 
         // Subscribe to self
         let subject_clone1 = subject.clone();
-        self.subscribe(&tracker1, move |value| {
+        self.subscribe(tracker1.tracker(), move |value| {
             subject_clone1.next(value.clone());
         });
 
         // Subscribe to other
         let subject_clone2 = subject.clone();
-        other.subscribe(&tracker2, move |value| {
+        other.subscribe(tracker2.tracker(), move |value| {
             subject_clone2.next(value.clone());
         });
 
