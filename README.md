@@ -1,5 +1,7 @@
 # rx-rs
 
+[![Crates.io](https://img.shields.io/crates/v/rx-rs.svg)](https://crates.io/crates/rx-rs)
+
 A lightweight single-threaded push-based reactive programming library for Rust.
 
 ## Architecture
