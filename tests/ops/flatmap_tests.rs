@@ -2,7 +2,7 @@ use rx_rs::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// Test 1: RxVal.flat_map() switches to new inner RxVal
+// RxVal.flat_map() switches to new inner RxVal
 #[test]
 fn test_rx_val_flatmap() {
     let outer = RxRef::new(1);
@@ -24,7 +24,7 @@ fn test_rx_val_flatmap() {
     assert_eq!(flattened.get(), 10);
 }
 
-// Test 2: RxVal.flat_map() subscribes to inner changes
+// RxVal.flat_map() subscribes to inner changes
 #[test]
 fn test_rx_val_flatmap_inner_changes() {
     let outer = RxRef::new(1);
@@ -61,11 +61,11 @@ fn test_rx_val_flatmap_inner_changes() {
     assert_eq!(flattened.get(), 25);
 }
 
-// Test 3: RxRef.flat_map() works the same
+// RxRef.flat_map() works the same
 #[test]
 fn test_rx_ref_flatmap() {
     let selector = RxRef::new(0);
-    let values = vec![RxRef::new(100), RxRef::new(200), RxRef::new(300)];
+    let values = [RxRef::new(100), RxRef::new(200), RxRef::new(300)];
 
     let flattened = selector.flat_map(move |&idx| values[idx].val());
 
@@ -78,7 +78,7 @@ fn test_rx_ref_flatmap() {
     assert_eq!(flattened.get(), 300);
 }
 
-// Test 4: RxObservable.flat_map_val() emits from inner RxVal
+// RxObservable.flat_map_val() emits from inner RxVal
 #[test]
 fn test_rx_observable_flatmap_val() {
     let tracker = DisposableTracker::new();
@@ -112,7 +112,7 @@ fn test_rx_observable_flatmap_val() {
     assert_eq!(*values.borrow(), vec![100, 100, 200, 200, 200]);
 }
 
-// Test 5: RxVal.flat_map_ref() works with RxRef
+// RxVal.flat_map_ref() works with RxRef
 #[test]
 fn test_rx_val_flatmap_ref() {
     let outer = RxRef::new(0);
@@ -133,7 +133,7 @@ fn test_rx_val_flatmap_ref() {
     assert_eq!(flattened.get(), "second");
 }
 
-// Test 6: RxVal.flat_map_observable() switches observables
+// RxVal.flat_map_observable() switches observables
 #[test]
 fn test_rx_val_flatmap_observable() {
     let tracker = DisposableTracker::new();

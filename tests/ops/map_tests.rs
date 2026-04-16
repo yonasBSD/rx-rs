@@ -2,7 +2,7 @@ use rx_rs::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// Test 1: RxVal.map() creates mapped value
+// RxVal.map() creates mapped value
 #[test]
 fn test_rx_val_map() {
     let number = RxRef::new(5);
@@ -14,7 +14,7 @@ fn test_rx_val_map() {
     assert_eq!(doubled.get(), 20);
 }
 
-// Test 2: RxRef.map() works the same
+// RxRef.map() works the same
 #[test]
 fn test_rx_ref_map() {
     let name = RxRef::new("alice");
@@ -26,7 +26,7 @@ fn test_rx_ref_map() {
     assert_eq!(upper.get(), "BOB");
 }
 
-// Test 3: RxObservable.map() transforms emissions
+// RxObservable.map() transforms emissions
 #[test]
 fn test_rx_observable_map() {
     let tracker = DisposableTracker::new();
@@ -47,7 +47,7 @@ fn test_rx_observable_map() {
     assert_eq!(*values.borrow(), vec![2, 4, 6]);
 }
 
-// Test 4: RxSubject.map() works the same
+// RxSubject.map() works the same
 #[test]
 fn test_rx_subject_map() {
     let tracker = DisposableTracker::new();
@@ -67,7 +67,7 @@ fn test_rx_subject_map() {
     assert_eq!(*values.borrow(), vec![10, 20]);
 }
 
-// Test 5: Multiple maps can be chained
+// Multiple maps can be chained
 #[test]
 fn test_map_chaining() {
     let number = RxRef::new(2);

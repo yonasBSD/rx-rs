@@ -2,7 +2,7 @@ use rx_rs::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// Test 1: RxObservable.join_observable() merges two observables
+// RxObservable.join_observable() merges two observables
 #[test]
 fn test_rx_observable_join_observable() {
     let tracker = DisposableTracker::new();
@@ -26,7 +26,7 @@ fn test_rx_observable_join_observable() {
     assert_eq!(*values.borrow(), vec![1, 2, 3, 4]);
 }
 
-// Test 2: RxObservable.join_subject() works
+// RxObservable.join_subject() works
 #[test]
 fn test_rx_observable_join_subject() {
     let tracker = DisposableTracker::new();
@@ -49,7 +49,7 @@ fn test_rx_observable_join_subject() {
     assert_eq!(*values.borrow(), vec![10, 20, 30]);
 }
 
-// Test 3: RxSubject.join_observable() works
+// RxSubject.join_observable() works
 #[test]
 fn test_rx_subject_join_observable() {
     let tracker = DisposableTracker::new();
@@ -72,7 +72,7 @@ fn test_rx_subject_join_observable() {
     assert_eq!(*values.borrow(), vec!["a", "b", "c"]);
 }
 
-// Test 4: RxSubject.join_subject() works
+// RxSubject.join_subject() works
 #[test]
 fn test_rx_subject_join_subject() {
     let tracker = DisposableTracker::new();
@@ -96,7 +96,7 @@ fn test_rx_subject_join_subject() {
     assert_eq!(*values.borrow(), vec![100, 200, 300, 400]);
 }
 
-// Test 5: Join multiple observables
+// Join multiple observables
 #[test]
 fn test_join_multiple() {
     let tracker = DisposableTracker::new();

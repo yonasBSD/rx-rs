@@ -1,21 +1,19 @@
 use rx_rs::prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
-// Test 1: RxObservable.to_val() creates val with initial value
+// RxObservable.to_val() creates val with initial value
 #[test]
 fn test_observable_to_val_initial() {
-    let mut tracker = DisposableTracker::new();
+    let tracker = DisposableTracker::new();
     let subject = RxSubject::new();
     let val = subject.observable().to_val(0, tracker.tracker());
 
     assert_eq!(val.get(), 0);
 }
 
-// Test 2: RxObservable.to_val() updates on emissions
+// RxObservable.to_val() updates on emissions
 #[test]
 fn test_observable_to_val_updates() {
-    let mut tracker = DisposableTracker::new();
+    let tracker = DisposableTracker::new();
     let subject = RxSubject::new();
     let val = subject.observable().to_val(0, tracker.tracker());
 
@@ -26,10 +24,10 @@ fn test_observable_to_val_updates() {
     assert_eq!(val.get(), 100);
 }
 
-// Test 3: RxSubject.to_val() works the same
+// RxSubject.to_val() works the same
 #[test]
 fn test_subject_to_val() {
-    let mut tracker = DisposableTracker::new();
+    let tracker = DisposableTracker::new();
     let subject = RxSubject::new();
     let val = subject.to_val("initial", tracker.tracker());
 
@@ -39,7 +37,7 @@ fn test_subject_to_val() {
     assert_eq!(val.get(), "changed");
 }
 
-// Test 4: toVal() stops updating when tracker is disposed
+// toVal() stops updating when tracker is disposed
 #[test]
 fn test_to_val_tracker_disposal() {
     let mut tracker = DisposableTracker::new();
