@@ -72,17 +72,20 @@ impl<T: 'static> RxObservable<T> {
 
         // Store for future events
         let subscriber_clone = subscriber.clone();
-        let inner_clone = self.inner.clone();
+        let inner_weak = Rc::downgrade(&self.inner);
 
         self.inner.borrow_mut().subscribers.push(subscriber_clone);
 
         // Add cleanup to tracker
         tracker.add(move || {
             // Remove subscriber when tracker drops
-            inner_clone
-                .borrow_mut()
-                .subscribers
-                .retain(|s| !Rc::ptr_eq(s, &subscriber));
+            // Use weak reference to avoid cycle
+            if let Some(inner_rc) = inner_weak.upgrade() {
+                inner_rc
+                    .borrow_mut()
+                    .subscribers
+                    .retain(|s| !Rc::ptr_eq(s, &subscriber));
+            }
         });
     }
 
@@ -110,10 +113,11 @@ impl<T: 'static> RxObservable<T> {
     ///
     /// This is an internal method used by RxSubject.
     pub(crate) fn emit(&self, value: &T) {
-        let inner = self.inner.borrow();
+        // Clone subscribers list to avoid holding borrow during notification
+        let subscribers = self.inner.borrow().subscribers.clone();
 
-        // Notify all subscribers
-        for subscriber in &inner.subscribers {
+        // Notify all subscribers without holding the borrow
+        for subscriber in &subscribers {
             let mut sub = subscriber.borrow_mut();
             sub(value);
         }

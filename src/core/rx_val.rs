@@ -81,17 +81,20 @@ impl<T: 'static> RxVal<T> {
 
         // Store for future updates
         let subscriber_clone = subscriber.clone();
-        let inner_clone = self.inner.clone();
+        let inner_weak = Rc::downgrade(&self.inner);
 
         self.inner.borrow_mut().subscribers.push(subscriber_clone);
 
         // Add cleanup to tracker
         tracker.add(move || {
             // Remove subscriber when tracker drops
-            inner_clone
-                .borrow_mut()
-                .subscribers
-                .retain(|s| !Rc::ptr_eq(s, &subscriber));
+            // Use weak reference to avoid cycle
+            if let Some(inner_rc) = inner_weak.upgrade() {
+                inner_rc
+                    .borrow_mut()
+                    .subscribers
+                    .retain(|s| !Rc::ptr_eq(s, &subscriber));
+            }
         });
     }
 
@@ -191,14 +194,28 @@ impl<T: 'static> RxVal<T> {
         // Create a new RxRef to hold the mapped values
         let rx_ref = RxRef::new(initial);
 
+        // Get the result val first
+        let mapped_val = rx_ref.val();
+
         // Subscribe to this RxVal and update the mapped ref
-        let rx_ref_clone = rx_ref.clone();
+        // Use weak reference to result's inner to avoid cycle
+        let result_weak = Rc::downgrade(&mapped_val.inner);
         self.subscribe(tracker.tracker(), move |value| {
-            rx_ref_clone.set(f(value));
+            if let Some(result_inner) = result_weak.upgrade() {
+                let new_value = f(value);
+                let mut inner = result_inner.borrow_mut();
+                if inner.value != new_value {
+                    inner.value = new_value.clone();
+                    // Notify subscribers
+                    for subscriber in &inner.subscribers {
+                        let mut sub = subscriber.borrow_mut();
+                        sub(&new_value);
+                    }
+                }
+            }
         });
 
-        // Create a new RxVal with the tracker attached
-        let mapped_val = rx_ref.val();
+        // Attach the tracker to keep subscription alive
         mapped_val.inner.borrow_mut()._lifetime_tracker = Some(tracker as Rc<dyn Any>);
 
         mapped_val
@@ -254,31 +271,54 @@ impl<T: 'static> RxVal<T> {
         // Track the current inner subscription
         let inner_tracker = Rc::new(RefCell::new(DisposableTracker::new()));
 
-        // Subscribe to the outer RxVal
-        let result_ref_clone = result_ref.clone();
+        // Get result val first
+        let result_val = result_ref.val();
+
+        // Subscribe to the outer RxVal using weak reference to result
+        let result_weak = Rc::downgrade(&result_val.inner);
         let inner_tracker_clone = inner_tracker.clone();
         let f_clone = Rc::new(f);
 
         self.subscribe(outer_tracker.tracker(), move |outer_value| {
-            // Get new inner RxVal
-            let new_inner = f_clone(outer_value);
+            if let Some(result_inner) = result_weak.upgrade() {
+                // Get new inner RxVal
+                let new_inner = f_clone(outer_value);
 
-            // Cancel previous inner subscription
-            inner_tracker_clone.borrow_mut().dispose();
-            *inner_tracker_clone.borrow_mut() = DisposableTracker::new();
+                // Cancel previous inner subscription
+                inner_tracker_clone.borrow_mut().dispose();
+                *inner_tracker_clone.borrow_mut() = DisposableTracker::new();
 
-            // Set to the new inner's current value
-            result_ref_clone.set(new_inner.get());
+                // Set to the new inner's current value
+                let new_value = new_inner.get();
+                {
+                    let mut inner = result_inner.borrow_mut();
+                    if inner.value != new_value {
+                        inner.value = new_value.clone();
+                        // Notify subscribers
+                        for subscriber in &inner.subscribers {
+                            let mut sub = subscriber.borrow_mut();
+                            sub(&new_value);
+                        }
+                    }
+                }
 
-            // Subscribe to the new inner
-            let result_ref_clone2 = result_ref_clone.clone();
-            new_inner.subscribe(inner_tracker_clone.borrow().tracker(), move |inner_value| {
-                result_ref_clone2.set(inner_value.clone());
-            });
+                // Subscribe to the new inner using weak reference
+                let result_weak2 = Rc::downgrade(&result_inner);
+                new_inner.subscribe(inner_tracker_clone.borrow().tracker(), move |inner_value| {
+                    if let Some(result_inner2) = result_weak2.upgrade() {
+                        let mut inner = result_inner2.borrow_mut();
+                        if inner.value != *inner_value {
+                            inner.value = inner_value.clone();
+                            // Notify subscribers
+                            for subscriber in &inner.subscribers {
+                                let mut sub = subscriber.borrow_mut();
+                                sub(inner_value);
+                            }
+                        }
+                    }
+                });
+            }
         });
-
-        // Get result val with both trackers attached
-        let result_val = result_ref.val();
 
         // We need to keep both trackers alive
         // Store them in a combined structure
@@ -384,22 +424,44 @@ impl<T: 'static> RxVal<T> {
         let tracker1 = Rc::new(DisposableTracker::new());
         let tracker2 = Rc::new(DisposableTracker::new());
 
-        // Subscribe to self
-        let result_ref_clone1 = result_ref.clone();
+        // Get result val first
+        let result_val = result_ref.val();
+
+        // Subscribe to self using weak references
+        let result_weak1 = Rc::downgrade(&result_val.inner);
         let other_clone1 = other.clone();
         self.subscribe(tracker1.tracker(), move |self_val| {
-            result_ref_clone1.set((self_val.clone(), other_clone1.get()));
+            if let Some(result_inner) = result_weak1.upgrade() {
+                let new_value = (self_val.clone(), other_clone1.get());
+                let mut inner = result_inner.borrow_mut();
+                if inner.value != new_value {
+                    inner.value = new_value.clone();
+                    // Notify subscribers
+                    for subscriber in &inner.subscribers {
+                        let mut sub = subscriber.borrow_mut();
+                        sub(&new_value);
+                    }
+                }
+            }
         });
 
-        // Subscribe to other
-        let result_ref_clone2 = result_ref.clone();
+        // Subscribe to other using weak references
+        let result_weak2 = Rc::downgrade(&result_val.inner);
         let self_clone = self.clone();
         other.subscribe(tracker2.tracker(), move |other_val| {
-            result_ref_clone2.set((self_clone.get(), other_val.clone()));
+            if let Some(result_inner) = result_weak2.upgrade() {
+                let new_value = (self_clone.get(), other_val.clone());
+                let mut inner = result_inner.borrow_mut();
+                if inner.value != new_value {
+                    inner.value = new_value.clone();
+                    // Notify subscribers
+                    for subscriber in &inner.subscribers {
+                        let mut sub = subscriber.borrow_mut();
+                        sub(&new_value);
+                    }
+                }
+            }
         });
-
-        // Get result val with both trackers attached
-        let result_val = result_ref.val();
         let combined_tracker = Rc::new((tracker1, tracker2));
         result_val.inner.borrow_mut()._lifetime_tracker = Some(combined_tracker as Rc<dyn Any>);
 
@@ -442,17 +504,23 @@ where
     where
         T: PartialEq,
     {
-        let mut inner = self.inner.borrow_mut();
+        // Clone subscribers list and value to avoid holding borrow during notification
+        let (subscribers, new_value) = {
+            let mut inner = self.inner.borrow_mut();
 
-        // Only update and notify if the value actually changed
-        if inner.value != value {
-            inner.value = value;
-
-            // Notify all subscribers
-            for subscriber in &inner.subscribers {
-                let mut sub = subscriber.borrow_mut();
-                sub(&inner.value);
+            // Only update and notify if the value actually changed
+            if inner.value != value {
+                inner.value = value.clone();
+                (inner.subscribers.clone(), value)
+            } else {
+                return; // No change, no notification
             }
+        };
+
+        // Notify all subscribers without holding the borrow
+        for subscriber in &subscribers {
+            let mut sub = subscriber.borrow_mut();
+            sub(&new_value);
         }
     }
 }
