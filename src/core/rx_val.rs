@@ -10,6 +10,7 @@ use super::tracker::{DisposableTracker, Tracker};
 type Subscriber<T> = Rc<RefCell<Box<dyn FnMut(&T)>>>;
 
 /// Internal storage for a reactive value.
+#[derive(Clone)]
 struct RxValInner<T> {
     value: T,
     subscribers: Vec<Subscriber<T>>,

@@ -78,6 +78,7 @@ impl Clone for Tracker {
 /// Unlike Tracker, DisposableTracker provides a `dispose()` method to
 /// explicitly clean up all subscriptions. This is useful for long-lived
 /// objects that need to clear subscriptions mid-lifecycle.
+#[derive(Clone)]
 pub struct DisposableTracker {
     tracker: Tracker,
 }

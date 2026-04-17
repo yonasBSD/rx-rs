@@ -149,3 +149,18 @@ fn test_modify_triggers_subscribers() {
 
     assert_eq!(*values.borrow(), vec![0, 10, 20]);
 }
+
+#[test]
+fn test_dropped_mapped_rx_to_drop_sub() {
+    let tracker = DisposableTracker::new();
+    let rx = RxRef::new(0);
+
+    {
+        let mapped = rx.map(|a| a * a);
+        mapped.subscribe(tracker.tracker(), |a| println!("{a}"));
+        assert_eq!(rx.subscriber_count(), 1);
+    }
+
+    assert_eq!(rx.subscriber_count(), 0);
+    rx.val().subscribe(tracker.tracker(), |a| println!("{a}"));
+}
