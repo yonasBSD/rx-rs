@@ -70,11 +70,11 @@ impl<T: 'static> RxVal<T> {
         F: FnMut(&T) + 'static,
         T: Clone,
     {
-        // Call immediately with current value
-        {
-            let inner = self.inner.borrow();
-            f(&inner.value);
-        }
+        // Clone current value and release borrow before calling callback
+        let current_value = self.inner.borrow().value.clone();
+
+        // Call immediately with cloned value (no borrow held)
+        f(&current_value);
 
         // Wrap the subscriber in Rc<RefCell<>> for shared ownership
         let subscriber = Rc::new(RefCell::new(Box::new(f) as Box<dyn FnMut(&T)>));
@@ -83,6 +83,7 @@ impl<T: 'static> RxVal<T> {
         let subscriber_clone = subscriber.clone();
         let inner_weak = Rc::downgrade(&self.inner);
 
+        // Add subscriber - now this will succeed even if called from within a notification
         self.inner.borrow_mut().subscribers.push(subscriber_clone);
 
         // Add cleanup to tracker
@@ -90,10 +91,9 @@ impl<T: 'static> RxVal<T> {
             // Remove subscriber when tracker drops
             // Use weak reference to avoid cycle
             if let Some(inner_rc) = inner_weak.upgrade() {
-                inner_rc
-                    .borrow_mut()
-                    .subscribers
-                    .retain(|s| !Rc::ptr_eq(s, &subscriber));
+                if let Ok(mut inner) = inner_rc.try_borrow_mut() {
+                    inner.subscribers.retain(|s| !Rc::ptr_eq(s, &subscriber));
+                }
             }
         });
     }
@@ -252,7 +252,7 @@ impl<T: 'static> RxVal<T> {
     /// ```
     pub fn flat_map<B, F>(&self, f: F) -> RxVal<B>
     where
-        T: Clone,
+        T: Clone + PartialEq,
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxVal<B> + 'static,
     {
@@ -271,16 +271,54 @@ impl<T: 'static> RxVal<T> {
         // Track the current inner subscription
         let inner_tracker = Rc::new(RefCell::new(DisposableTracker::new()));
 
+        // Store the current inner RxVal to keep it alive
+        let current_inner = Rc::new(RefCell::new(Some(initial_inner.clone())));
+
         // Get result val first
         let result_val = result_ref.val();
+
+        // Subscribe to the initial inner RxVal
+        let result_weak_init = Rc::downgrade(&result_val.inner);
+        initial_inner.subscribe(inner_tracker.borrow().tracker(), move |inner_value| {
+            if let Some(result_inner) = result_weak_init.upgrade() {
+                let mut inner = result_inner.borrow_mut();
+                if inner.value != *inner_value {
+                    inner.value = inner_value.clone();
+                    // Notify subscribers
+                    for subscriber in &inner.subscribers {
+                        let mut sub = subscriber.borrow_mut();
+                        sub(inner_value);
+                    }
+                }
+            }
+        });
+
+        // Track the last outer value to avoid re-subscribing on duplicate updates
+        let last_outer_value = Rc::new(RefCell::new(self.get()));
 
         // Subscribe to the outer RxVal using weak reference to result
         let result_weak = Rc::downgrade(&result_val.inner);
         let inner_tracker_clone = inner_tracker.clone();
+        let current_inner_clone = current_inner.clone();
         let f_clone = Rc::new(f);
 
         self.subscribe(outer_tracker.tracker(), move |outer_value| {
             if let Some(result_inner) = result_weak.upgrade() {
+                // Only recreate inner subscription if outer value changed
+                let should_update = {
+                    let mut last_val = last_outer_value.borrow_mut();
+                    if *last_val != *outer_value {
+                        *last_val = outer_value.clone();
+                        true
+                    } else {
+                        false
+                    }
+                };
+
+                if !should_update {
+                    return; // Same value, don't recreate subscription
+                }
+
                 // Get new inner RxVal
                 let new_inner = f_clone(outer_value);
 
@@ -317,12 +355,15 @@ impl<T: 'static> RxVal<T> {
                         }
                     }
                 });
+
+                // Update current_inner to keep the new one alive
+                *current_inner_clone.borrow_mut() = Some(new_inner);
             }
         });
 
-        // We need to keep both trackers alive
+        // We need to keep both trackers and current_inner alive
         // Store them in a combined structure
-        let combined_tracker = Rc::new((outer_tracker, inner_tracker));
+        let combined_tracker = Rc::new((outer_tracker, inner_tracker, current_inner));
         result_val.inner.borrow_mut()._lifetime_tracker =
             Some(combined_tracker as Rc<dyn std::any::Any>);
 
@@ -333,7 +374,7 @@ impl<T: 'static> RxVal<T> {
     /// Delegates to flat_map by converting the RxRef to RxVal.
     pub fn flat_map_ref<B, F>(&self, f: F) -> RxVal<B>
     where
-        T: Clone,
+        T: Clone + PartialEq,
         B: Clone + PartialEq + 'static,
         F: Fn(&T) -> RxRef<B> + 'static,
     {

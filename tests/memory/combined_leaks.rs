@@ -11,10 +11,14 @@ fn test_combined_operations_leak_potential() {
 
     // Create complex dependency graph
     let a_clone = a.clone();
-    let ab_sum = b.val().map(move |b_val| a_clone.get() + b_val);
+    let ab_sum = b.val().flat_map(move |&b_val| {
+        a_clone.val().map(move |&a_val| a_val + b_val)
+    });
 
     let b_clone = b.clone();
-    let ab_product = a.val().map(move |a_val| a_val * b_clone.get());
+    let ab_product = a.val().flat_map(move |&a_val| {
+        b_clone.val().map(move |&b_val| a_val * b_val)
+    });
 
     // Clone ab_product before moving it into zip_val
     let ab_product_clone = ab_product.clone();
