@@ -36,6 +36,33 @@ impl Tracker {
     pub fn subscription_count(&self) -> usize {
         self.cleanups.borrow().len()
     }
+
+    /// Tracks another DisposableTracker's lifetime.
+    ///
+    /// When the Tracker's parent DisposableTracker is disposed (either manually via `dispose()` or
+    /// automatically when dropped), the tracked DisposableTracker will also be disposed.
+    ///
+    /// This is useful for creating hierarchical cleanup relationships.
+    ///
+    /// # Arguments
+    /// * `child` - The DisposableTracker to track
+    ///
+    /// # Example
+    /// ```
+    /// use rx_rs::core::DisposableTracker;
+    ///
+    /// let parent = DisposableTracker::new();
+    /// let mut child = DisposableTracker::new();
+    ///
+    /// parent.tracker().track(child);
+    ///
+    /// // When parent is disposed, child is also disposed
+    /// ```
+    pub fn track(&self, mut child: DisposableTracker) {
+        self.add(move || {
+            child.dispose();
+        });
+    }
 }
 
 impl Clone for Tracker {
