@@ -100,7 +100,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rx-rs = "0.1.0"
+rx-rs = "0.1.1"
 ```
 
 ## License
