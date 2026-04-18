@@ -131,10 +131,7 @@ impl<T: 'static> RxVal<T> {
                 }
             } else {
                 #[cfg(feature = "debug")]
-                tracing::debug!(
-                    ptr = format!("0x{:x}", debug_ptr),
-                    "RxVal already dropped"
-                );
+                tracing::debug!(ptr = format!("0x{:x}", debug_ptr), "RxVal already dropped");
             }
         });
     }
