@@ -78,7 +78,10 @@ impl Clone for Tracker {
 /// Unlike Tracker, DisposableTracker provides a `dispose()` method to
 /// explicitly clean up all subscriptions. This is useful for long-lived
 /// objects that need to clear subscriptions mid-lifecycle.
-#[derive(Clone)]
+///
+/// NOTE: DisposableTracker is NOT Clone. If you need to share it, wrap it in Rc<RefCell<>>.
+/// Cloning would be dangerous because the Drop implementation drains subscriptions,
+/// so when any clone is dropped, it would unsubscribe ALL clones.
 pub struct DisposableTracker {
     tracker: Tracker,
 }
@@ -102,9 +105,21 @@ impl DisposableTracker {
     /// subscriptions, but all previous subscriptions are cleaned up.
     pub fn dispose(&mut self) {
         if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
+            #[cfg(feature = "debug")]
+            {
+                let count = cleanups.len();
+                tracing::debug!(
+                    subscription_count = count,
+                    "manually disposing DisposableTracker"
+                );
+            }
+
             for cleanup in cleanups.drain(..) {
                 cleanup();
             }
+
+            #[cfg(feature = "debug")]
+            tracing::debug!("manual dispose complete");
         }
     }
 
@@ -124,9 +139,21 @@ impl Drop for DisposableTracker {
     fn drop(&mut self) {
         // Clean up all subscriptions when DisposableTracker is dropped
         if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
+            #[cfg(feature = "debug")]
+            {
+                let count = cleanups.len();
+                tracing::debug!(
+                    subscription_count = count,
+                    "dropping DisposableTracker"
+                );
+            }
+
             for cleanup in cleanups.drain(..) {
                 cleanup();
             }
+
+            #[cfg(feature = "debug")]
+            tracing::debug!("DisposableTracker drop complete");
         }
     }
 }

@@ -140,6 +140,12 @@ where
         self.inner.subscriber_count()
     }
 
+    /// Returns a pointer address for debugging identity.
+    /// Use this to check if two RxRef instances share the same underlying data.
+    pub fn debug_ptr(&self) -> usize {
+        self.inner.debug_ptr()
+    }
+
     /// Converts this RxRef into a stream (RxObservable).
     ///
     /// The returned observable emits the current value immediately on subscription,

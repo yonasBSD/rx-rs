@@ -11,3 +11,7 @@ keywords = ["reactive", "observable", "rx", "functional"]
 categories = ["asynchronous", "data-structures"]
 
 [dependencies]
+tracing = { version = "0.1.44", optional = true }
+
+[features]
+debug = ["tracing"]

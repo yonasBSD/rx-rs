@@ -87,14 +87,54 @@ impl<T: 'static> RxVal<T> {
         // Add subscriber - now this will succeed even if called from within a notification
         self.inner.borrow_mut().subscribers.push(subscriber_clone);
 
+        #[cfg(feature = "debug")]
+        {
+            let debug_ptr = std::rc::Rc::as_ptr(&self.inner) as usize;
+            let sub_count = self.inner.borrow().subscribers.len();
+            tracing::debug!(
+                ptr = format!("0x{:x}", debug_ptr),
+                subscriber_count = sub_count,
+                "subscription added to RxVal"
+            );
+        }
+
         // Add cleanup to tracker
+        #[cfg(feature = "debug")]
+        let debug_ptr = std::rc::Rc::as_ptr(&self.inner) as usize;
+
         tracker.add(move || {
             // Remove subscriber when tracker drops
             // Use weak reference to avoid cycle
+            #[cfg(feature = "debug")]
+            tracing::debug!(
+                ptr = format!("0x{:x}", debug_ptr),
+                "subscription cleanup called"
+            );
+
             if let Some(inner_rc) = inner_weak.upgrade() {
                 if let Ok(mut inner) = inner_rc.try_borrow_mut() {
+                    #[cfg(feature = "debug")]
+                    let before_count = inner.subscribers.len();
+
                     inner.subscribers.retain(|s| !Rc::ptr_eq(s, &subscriber));
+
+                    #[cfg(feature = "debug")]
+                    {
+                        let after_count = inner.subscribers.len();
+                        tracing::debug!(
+                            ptr = format!("0x{:x}", debug_ptr),
+                            before = before_count,
+                            after = after_count,
+                            "removed subscriber from RxVal"
+                        );
+                    }
                 }
+            } else {
+                #[cfg(feature = "debug")]
+                tracing::debug!(
+                    ptr = format!("0x{:x}", debug_ptr),
+                    "RxVal already dropped"
+                );
             }
         });
     }
@@ -102,6 +142,12 @@ impl<T: 'static> RxVal<T> {
     /// Returns the number of active subscribers.
     pub fn subscriber_count(&self) -> usize {
         self.inner.borrow().subscribers.len()
+    }
+
+    /// Returns a pointer address for debugging identity.
+    /// Use this to check if two RxVal instances share the same underlying data.
+    pub fn debug_ptr(&self) -> usize {
+        std::rc::Rc::as_ptr(&self.inner) as usize
     }
 
     /// Converts this RxVal into a stream (RxObservable).
