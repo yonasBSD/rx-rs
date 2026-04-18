@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 type Cleanups = Rc<RefCell<Vec<Box<dyn FnOnce()>>>>;
+type OwnerCount = Rc<()>;
 
 /// Tracks reactive subscriptions and automatically cleans them up when dropped.
 ///
@@ -79,11 +80,14 @@ impl Clone for Tracker {
 /// explicitly clean up all subscriptions. This is useful for long-lived
 /// objects that need to clear subscriptions mid-lifecycle.
 ///
-/// NOTE: DisposableTracker is NOT Clone. If you need to share it, wrap it in Rc<RefCell<>>.
-/// Cloning would be dangerous because the Drop implementation drains subscriptions,
-/// so when any clone is dropped, it would unsubscribe ALL clones.
+/// DisposableTracker is Clone - all clones share the same internal state via Rc<RefCell>.
+/// Subscriptions are cleaned up when ALL DisposableTracker clones are dropped.
+/// Tracker clones do NOT count towards this - only DisposableTracker ownership matters.
+#[derive(Clone)]
 pub struct DisposableTracker {
     tracker: Tracker,
+    // Separate Rc to track only DisposableTracker clones (not Tracker clones)
+    owner_count: OwnerCount,
 }
 
 impl DisposableTracker {
@@ -91,6 +95,7 @@ impl DisposableTracker {
     pub fn new() -> Self {
         Self {
             tracker: Tracker::new(),
+            owner_count: Rc::new(()),
         }
     }
 
@@ -105,6 +110,10 @@ impl DisposableTracker {
     /// subscriptions, but all previous subscriptions are cleaned up.
     pub fn dispose(&mut self) {
         if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
+            if cleanups.is_empty() {
+                return; // Already disposed or no subscriptions
+            }
+
             #[cfg(feature = "debug")]
             {
                 let count = cleanups.len();
@@ -137,23 +146,30 @@ impl Default for DisposableTracker {
 
 impl Drop for DisposableTracker {
     fn drop(&mut self) {
-        // Clean up all subscriptions when DisposableTracker is dropped
-        if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
-            #[cfg(feature = "debug")]
-            {
-                let count = cleanups.len();
-                tracing::debug!(
-                    subscription_count = count,
-                    "dropping DisposableTracker"
-                );
-            }
+        // Only clean up when the last DisposableTracker clone is dropped
+        // Use owner_count (not tracker.cleanups) to ignore Tracker clones
+        if Rc::strong_count(&self.owner_count) == 1 {
+            if let Ok(mut cleanups) = self.tracker.cleanups.try_borrow_mut() {
+                if cleanups.is_empty() {
+                    return; // Already disposed
+                }
 
-            for cleanup in cleanups.drain(..) {
-                cleanup();
-            }
+                #[cfg(feature = "debug")]
+                {
+                    let count = cleanups.len();
+                    tracing::debug!(
+                        subscription_count = count,
+                        "dropping last DisposableTracker clone"
+                    );
+                }
 
-            #[cfg(feature = "debug")]
-            tracing::debug!("DisposableTracker drop complete");
+                for cleanup in cleanups.drain(..) {
+                    cleanup();
+                }
+
+                #[cfg(feature = "debug")]
+                tracing::debug!("DisposableTracker drop complete");
+            }
         }
     }
 }

@@ -158,7 +158,9 @@ fn test_tracker_can_be_stored() {
     assert_eq!(*call_count.borrow(), 3);
 }
 
-// Test that Tracker reference doesn't extend DisposableTracker lifetime
+// Test that Tracker clones don't prevent cleanup when DisposableTracker drops
+// With the new Clone semantics, Tracker clones keep subscriptions alive as long as
+// the DisposableTracker (or its clones) are alive
 #[test]
 fn test_tracker_does_not_extend_disposable_lifetime() {
     let rx = RxRef::new(0);
@@ -176,10 +178,11 @@ fn test_tracker_does_not_extend_disposable_lifetime() {
         assert_eq!(*call_count.borrow(), 1); // Initial call
 
         t.clone() // Return a clone of the tracker
-                  // dt gets dropped here
+                  // dt gets dropped here - since it's the only DisposableTracker, cleanup happens
     };
 
     // DisposableTracker was dropped, so subscription should be cleaned up
+    // even though we still have a Tracker clone
     rx.set(1);
     assert_eq!(*call_count.borrow(), 1); // Should NOT receive update
 
@@ -188,4 +191,42 @@ fn test_tracker_does_not_extend_disposable_lifetime() {
 
     rx.set(2);
     assert_eq!(*call_count.borrow(), 1); // Still no updates
+}
+
+// Test that DisposableTracker clones share state and only cleanup when all clones drop
+#[test]
+fn test_disposable_tracker_clones_cleanup_on_last_drop() {
+    let rx = RxRef::new(0);
+    let call_count = Rc::new(RefCell::new(0));
+    let call_count_clone = call_count.clone();
+
+    let dt1 = DisposableTracker::new();
+    let dt2 = dt1.clone(); // Clone the DisposableTracker
+    let dt3 = dt1.clone(); // Another clone
+
+    // Subscribe using the first clone
+    rx.val().subscribe(dt1.tracker(), move |_| {
+        *call_count_clone.borrow_mut() += 1;
+    });
+
+    assert_eq!(*call_count.borrow(), 1); // Initial call
+
+    // Update the value - subscription should still be active
+    rx.set(1);
+    assert_eq!(*call_count.borrow(), 2);
+
+    // Drop the first clone - subscriptions should NOT be cleaned up yet
+    drop(dt1);
+    rx.set(2);
+    assert_eq!(*call_count.borrow(), 3); // Should still receive updates
+
+    // Drop the second clone - subscriptions should NOT be cleaned up yet
+    drop(dt2);
+    rx.set(3);
+    assert_eq!(*call_count.borrow(), 4); // Should still receive updates
+
+    // Drop the last clone - NOW subscriptions should be cleaned up
+    drop(dt3);
+    rx.set(4);
+    assert_eq!(*call_count.borrow(), 4); // Should NOT receive update
 }
