@@ -142,3 +142,23 @@ fn test_modify_triggers_subscribers() {
 
     assert_eq!(*values.borrow(), vec![0, 10, 20]);
 }
+
+#[test]
+fn test_flat_map_ref_functionality() {
+    let outer = RxRef::new(0);
+    let inner1 = RxRef::new(100);
+    let inner2 = RxRef::new(200);
+
+    let flattened = outer.flat_map_ref(move |&x| {
+        if x == 0 {
+            inner1.clone()
+        } else {
+            inner2.clone()
+        }
+    });
+
+    assert_eq!(flattened.get(), 100);
+
+    outer.set(1);
+    assert_eq!(flattened.get(), 200);
+}
